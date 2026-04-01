@@ -16,14 +16,13 @@ def load_resource():
     # Load Model AI
     model = tf.keras.models.load_model("keras_model.h5", compile=False)
     
-    # Load Label
-    # Ganti bagian load label di dalam fungsi load_resource dengan ini:
-with open("labels.txt", "r") as f:
-    class_names = []
-    for line in f.readlines():
-        item = line.strip()
-        if item: # Hanya ambil baris yang ada isinya
-            class_names.append(item)
+    # Load Label (PASTIKAN MENJOROK KE DALAM SEPERTI INI)
+    with open("labels.txt", "r") as f:
+        class_names = []
+        for line in f.readlines():
+            item = line.strip()
+            if item: # Hanya ambil baris yang ada isinya
+                class_names.append(item)
     
     # Mencari File CSV (Cek otomatis nama file)
     target_file = "Data_X-2.csv"
@@ -32,20 +31,20 @@ with open("labels.txt", "r") as f:
         all_files = os.listdir('.')
         csv_files = [f for f in all_files if f.endswith('.csv')]
         if csv_files:
-            target_file = csv_files[0] # Pakai file CSV pertama yang ketemu
+            target_file = csv_files[0] 
         else:
             st.error("❌ File CSV tidak ditemukan di GitHub!")
             st.stop()
 
     # Membaca CSV
-    # Kita tidak pakai skiprows=11 lagi karena asumsinya file sudah bersih
     df = pd.read_csv(target_file)
     
-    # Bersihkan nama kolom agar seragam (Nama, Kelas, Kecerdasan, Gaya_Belajar, RIASEC)
+    # Bersihkan nama kolom agar seragam
     # Sesuaikan urutan kolom: No(0), Nama(1), Kelas(2), Kecerdasan(3), Gaya(4), RIASEC(5)
     df = df.iloc[:, [1, 2, 3, 4, 5]]
     df.columns = ['Nama', 'Kelas', 'Kecerdasan', 'Gaya_Belajar', 'RIASEC']
     
+    # Baris return ini harus sejajar dengan kode di dalam def
     return model, class_names, df
 
 # Eksekusi Pemuatan
@@ -58,7 +57,6 @@ except Exception as e:
 
 # 3. Logika Pemetaan Karir Berdasarkan RIASEC
 def get_recommendation(ria_code):
-    # Ambil huruf pertama (misal 'R-S-I' diambil 'R')
     first_letter = str(ria_code)[0].upper() if pd.notna(ria_code) else "U"
     
     dict_recom = {
@@ -88,7 +86,9 @@ if foto:
     prediction = model.predict(data)
     index = np.argmax(prediction)
     score = prediction[0][index]
-    nama_terdeteksi = class_names[index][2:].strip()
+    
+    # Mengambil nama dari label (memotong angka di depan misal "0 Brian" jadi "Brian")
+    nama_terdeteksi = class_names[index].split(' ', 1)[-1].strip()
 
     if score > 0.7:
         st.success(f"Wajah Dikenali: **{nama_terdeteksi}** (Akurasi: {score*100:.1f}%)")
@@ -112,6 +112,6 @@ if foto:
                 st.success(f"**Saran Prodi:** {prodi}")
                 st.success(f"**Saran Profesi:** {karir}")
         else:
-            st.warning("Nama terdeteksi tapi tidak ditemukan di file CSV. Pastikan nama di labels.txt sama dengan di CSV.")
+            st.warning(f"Nama '{nama_terdeteksi}' tidak ditemukan di CSV. Pastikan nama di labels.txt sama dengan di file CSV.")
     else:
         st.error("Wajah tidak terdaftar atau pencahayaan kurang baik.")
