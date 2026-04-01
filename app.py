@@ -17,8 +17,13 @@ def load_resource():
     model = tf.keras.models.load_model("keras_model.h5", compile=False)
     
     # Load Label
-    with open("labels.txt", "r") as f:
-        class_names = [line.strip() for line in f.readlines()]
+    # Ganti bagian load label di dalam fungsi load_resource dengan ini:
+with open("labels.txt", "r") as f:
+    class_names = []
+    for line in f.readlines():
+        item = line.strip()
+        if item: # Hanya ambil baris yang ada isinya
+            class_names.append(item)
     
     # Mencari File CSV (Cek otomatis nama file)
     target_file = "Data_X-2.csv"
