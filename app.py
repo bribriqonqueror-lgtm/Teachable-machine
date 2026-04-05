@@ -36,7 +36,7 @@ def load_resource():
             st.error("❌ File CSV tidak ditemukan di GitHub!")
             st.stop()
 # Versi lebih kuat: Mengabaikan baris yang kolomnya berantakan
-df = pd.read_csv(target_file, on_bad_lines='skip', sep=None, engine='python')
+    df = pd.read_csv(target_file, on_bad_lines='skip', sep=None, engine='python')
     
     # Bersihkan nama kolom agar seragam
     # Sesuaikan urutan kolom: No(0), Nama(1), Kelas(2), Kecerdasan(3), Gaya(4), RIASEC(5)
