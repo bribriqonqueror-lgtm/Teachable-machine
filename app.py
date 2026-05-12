@@ -5,18 +5,28 @@ from PIL import Image, ImageOps
 import tensorflow as tf
 import os
 
-# 1. Konfigurasi Halaman
-st.set_page_config(page_title="AI Student Profiling - SMAN 1", layout="wide", page_icon="🎓")
+# 1. Konfigurasi Halaman (Layout Wide agar bisa dibagi kolom)
+st.set_page_config(page_title="AI Profiling SMAN 1", layout="wide", page_icon="🎓")
 
-# Desain Header
-st.markdown("<h1 style='text-align: center;'>🎓 Sistem Rekomendasi Prodi Berbasis AI</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center;'>Identifikasi profil siswa melalui scan wajah untuk saran karir terbaik.</p>", unsafe_allow_html=True)
-st.divider()
+# Custom CSS untuk mempercantik tampilan
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f5f7f9;
+    }
+    .stMetric {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # 2. Fungsi Memuat Model & Data (Optimasi untuk CSV Semicolon)
 @st.cache_resource
 def load_resource():
-    # Load Model AI
+    # Load Model AI (Pastikan file ini sudah ada di GitHub)
     model = tf.keras.models.load_model("keras_model.h5", compile=False)
     
     # Load Label
@@ -25,101 +35,111 @@ def load_resource():
         for line in f.readlines():
             item = line.strip()
             if item:
-                # Ambil nama setelah angka (misal: "0 Brian" -> "Brian")
+                # Menghapus angka di depan nama (misal "0 Brian" jadi "Brian")
                 parts = item.split(' ', 1)
                 class_names.append(parts[1].strip() if len(parts) > 1 else parts[0])
     
-    # Load Database CSV (Sesuai format asli: pemisah titik koma ';')
-    target_file = "Data_X-2.csv"
-    if os.path.exists(target_file):
-        df = pd.read_csv(target_file, sep=';')
-        # Menyesuaikan nama kolom agar mudah diakses
-        df.columns = ['No', 'Nama', 'Kelas', 'Kecerdasan', 'Gaya_Belajar', 'RIASEC']
-        return model, class_names, df
-    else:
-        st.error("❌ Database 'Data_X-2.csv' tidak ditemukan!")
-        st.stop()
+    # Load Database CSV (Pemisah Titik Koma)
+    df = pd.read_csv("Data_X-2.csv", sep=";")
+    return model, class_names, df
 
 model, class_names, df_siswa = load_resource()
 
-# 3. Logika Rekomendasi Jurusan/Prodi (Expanded RIASEC)
+# 3. Logika Rekomendasi Karir (RIASEC Mapping)
 def get_recommendation(riasec_code):
-    if pd.isna(riasec_code) or riasec_code == "":
-        return "Umum", "Silakan melakukan tes minat bakat lebih lanjut.", "Semua Jurusan"
-    
-    code = str(riasec_code).split('-')[0].strip()[0].upper() # Ambil huruf pertama
-    
-    data = {
-        'R': ("Teknik, Ilmu Komputer, Pertanian", "Insinyur, Ahli IT, Pilot", "Teknik Mesin, Elektro, Informatika"),
-        'I': ("Kedokteran, MIPA, Psikologi Forensik", "Dokter, Peneliti, Data Scientist", "Kedokteran, Biologi, Kimia"),
-        'A': ("DKV, Arsitektur, Seni Musik", "Desainer, Arsitek, Seniman", "Desain Produk, Film & Televisi"),
-        'S': ("Keguruan, Ilmu Komunikasi, Psikologi", "Guru, Perawat, Konselor", "Pendidikan, Sosiologi, Humas"),
-        'E': ("Manajemen, Bisnis, Hukum", "Pengusaha, Pengacara, Manajer", "Akuntansi, Manajemen Bisnis, Hukum"),
-        'C': ("Statistika, Administrasi, Perbankan", "Akuntan, Notaris, Auditor", "Ilmu Perpustakaan, Administrasi Negara")
+    riasec_code = str(riasec_code).upper()
+    mapping = {
+        "R": ("Teknik, Robotik, Pertanian", "Engineer, Arsitek, Teknisi", "Teknik Mesin, Teknik Sipil"),
+        "I": ("Sains, Riset, Kedokteran", "Peneliti, Dokter, Data Scientist", "Kedokteran, Fisika, Informatika"),
+        "A": ("Desain, Seni, Komunikasi", "Desainer, Penulis, Seniman", "DKV, Arsitektur, Sastra"),
+        "S": ("Pendidikan, Psikologi, Hukum", "Guru, Psikolog, Pengacara", "Psikologi, Hukum, Keguruan"),
+        "E": ("Bisnis, Manajemen, Politik", "Entrepreneur, Manager, Diplomat", "Manajemen, Ekonomi, Hubungan Internasional"),
+        "C": ("Akuntansi, Administrasi, Data", "Akuntan, Notaris, Auditor", "Akuntansi, Perpajakan, Statistika")
     }
-    return data.get(code, ("Umum", "Konsultasi dengan Guru BK", "Semua Jurusan"))
+    
+    # Ambil huruf pertama dari kode RIASEC (Misal 'R-I' ambil 'R')
+    first_letter = riasec_code[0] if riasec_code else "S"
+    return mapping.get(first_letter, ("Umum", "Konsultan", "Ilmu Komunikasi"))
 
 # 4. Fungsi Prediksi Gambar
 def predict_image(img):
     size = (224, 224)
     image = ImageOps.fit(img, size, Image.Resampling.LANCZOS)
-    img_array = np.asarray(image).astype(np.float32)
-    normalized_image = (img_array / 127.5) - 1
-    data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
-    data[0] = normalized_image
+    image_array = np.asarray(image)
+    normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
+    data = np.empty((1, 224, 224, 3), dtype=np.float32)
+    data[0] = normalized_image_array
     
     prediction = model.predict(data)
-    idx = np.argmax(prediction)
-    return class_names[idx], prediction[0][idx]
+    index = np.argmax(prediction)
+    return class_names[index], prediction[0][index]
 
-# 5. UI: Pemilihan Metode Input
-tab1, tab2 = st.tabs(["📸 Gunakan Kamera", "📁 Unggah Foto"])
-
-with tab1:
-    input_camera = st.camera_input("Scan Wajah Siswa")
-    final_img = input_camera if input_camera else None
-
-with tab2:
-    input_file = st.file_uploader("Pilih file foto siswa (JPG/PNG)", type=['jpg', 'png', 'jpeg'])
-    if input_file:
-        st.image(input_file, caption="Foto Berhasil Diunggah", width=300)
-        final_img = input_file
-
-# 6. Menampilkan Hasil & Data Siswa
-if final_img:
-    with st.spinner('Menganalisis wajah...'):
-        image = Image.open(final_img).convert("RGB")
-        nama_prediksi, skor = predict_image(image)
-        
-    if skor > 0.8: # Ambang batas akurasi 80%
-        st.success(f"### Wajah Dikenali: **{nama_prediksi}**")
-        
-        # Cari data di CSV
-        data_match = df_siswa[df_siswa['Nama'].str.contains(nama_prediksi, case=False, na=False)]
-        
-        if not data_match.empty:
-            siswa = data_match.iloc[0]
-            prodi, profesi, jurusan = get_recommendation(siswa['RIASEC'])
-            
-            # Tampilan Grid Data
-            col1, col2 = st.columns(2)
-            with col1:
-                st.subheader("📌 Profil Akademik")
-                st.write(f"**Kelas:** {siswa['Kelas']}")
-                st.info(f"**Kecerdasan Utama:**\n{siswa['Kecerdasan']}")
-                st.warning(f"**Gaya Belajar:** {siswa['Gaya_Belajar']}")
-            
-            with col2:
-                st.subheader("💡 Rekomendasi Masa Depan")
-                st.success(f"**Prodi Cocok:**\n{prodi}")
-                st.success(f"**Pilihan Jurusan Kuliah:**\n{jurusan}")
-                st.success(f"**Prospek Karir:**\n{profesi}")
-                st.write(f"*Berdasarkan Tipe RIASEC: {siswa['RIASEC']}*")
-        else:
-            st.warning("Wajah terdeteksi, namun data detail siswa tidak ditemukan di CSV.")
-    else:
-        st.error("Wajah tidak dikenali dengan cukup jelas. Harap coba lagi dengan pencahayaan lebih baik.")
-
-# Footer
+# --- TAMPILAN UTAMA ---
+st.title("🎓 AI Student Profiling - SMAN 1 Balikpapan")
+st.write("Arahkan wajah ke kamera untuk melihat profil akademik dan saran karir secara instan.")
 st.divider()
-st.caption("Aplikasi Klasifikasi Profil Siswa - Dikembangkan untuk SMAN 1")
+
+# Layout Kolom: Kiri (1 bagian) untuk Kamera, Kanan (2 bagian) untuk Hasil
+col_kamera, col_hasil = st.columns([1, 2])
+
+with col_kamera:
+    st.subheader("📷 Webcam Scan")
+    input_camera = st.camera_input("Posisikan wajah di tengah frame")
+
+with col_hasil:
+    st.subheader("📊 Hasil Analisis Profil")
+    
+    if input_camera:
+        with st.spinner('Sedang mencocokkan wajah dengan database...'):
+            image = Image.open(input_camera).convert("RGB")
+            nama_prediksi, skor = predict_image(image)
+        
+        # Ambang batas akurasi 80%
+        if skor > 0.8:
+            st.success(f"**Identitas Terdeteksi:** {nama_prediksi} ({skor*100:.1f}%)")
+            
+            # Cari data di CSV
+            data_match = df_siswa[df_siswa['NAMA PESERTA DIDIK'].str.contains(nama_prediksi, case=False, na=False)]
+            
+            if not data_match.empty:
+                siswa = data_match.iloc[0]
+                # Ambil kolom sesuai nama di CSV kamu
+                riasec = siswa['PEMETAAN MINAT DAN BAKAT DENGAN METODE RIASEC']
+                kecerdasan = siswa['TES KECERDASAN MAJEMUK']
+                gaya_belajar = siswa['ANGKET GAYA BELAJAR']
+                
+                prodi, profesi, jurusan = get_recommendation(riasec)
+                
+                # Baris 1: Informasi Dasar (Metric agar besar dan menonjol)
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Gaya Belajar", gaya_belajar)
+                m2.metric("Tipe RIASEC", riasec)
+                m3.metric("Kecerdasan", "Dominan")
+                
+                st.info(f"💡 **Detail Kecerdasan:** {kecerdasan}")
+                
+                # Baris 2: Rekomendasi Masa Depan
+                st.markdown("---")
+                st.subheader("🚀 Rekomendasi Karir & Pendidikan")
+                
+                res1, res2 = st.columns(2)
+                with res1:
+                    st.write("**Rumpun Prodi Cocok:**")
+                    st.warning(prodi)
+                    st.write("**Pilihan Jurusan Kuliah:**")
+                    st.warning(jurusan)
+                
+                with res2:
+                    st.write("**Prospek Profesi:**")
+                    st.success(profesi)
+                    st.write("**Catatan:**")
+                    st.caption("Hasil ini didasarkan pada integrasi data psikologi RIASEC dengan pengenalan wajah berbasis AI.")
+            else:
+                st.error("Wajah dikenali, namun data profil di CSV tidak ditemukan. Pastikan nama di label dan CSV sama.")
+        else:
+            st.warning("Wajah kurang jelas atau tidak terdaftar. Coba atur pencahayaan atau posisi wajah.")
+    else:
+        st.info("Menunggu input kamera... Silakan nyalakan kamera di sebelah kiri.")
+
+st.divider()
+st.caption("© 2026 Kelompok 6 - Informatika SMAN 1 Balikpapan")
